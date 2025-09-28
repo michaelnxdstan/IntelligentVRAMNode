@@ -1,0 +1,8 @@
+# WanVideo Enhanced BlockSwap (CUDA Optimized) Dependencies
+
+# Core dependencies
+torch>=2.0.0
+psutil>=5.8.0
+
+# Optional dependencies (usually included in ComfyUI)
+numpy>=1.21.0
