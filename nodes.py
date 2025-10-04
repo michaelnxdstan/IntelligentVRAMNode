@@ -1,6 +1,7 @@
 """
-WanVideo Enhanced BlockSwap (CUDA Optimized) - Independent Node
+WanVideo Enhanced BlockSwap - Independent Node
 Intelligent VRAM-DRAM balance management node definitions
+Supports NVIDIA CUDA and AMD ROCm GPUs
 """
 
 import torch
@@ -11,17 +12,32 @@ from typing import Dict, Any, Tuple
 
 # Handle import issues
 try:
-    from .intelligent_vram_manager import get_vram_manager, calculate_optimal_blockswap_config, register_model_tensors, cleanup_global_manager
+    from .intelligent_vram_manager import (
+        get_vram_manager,
+        calculate_optimal_blockswap_config,
+        register_model_tensors,
+        cleanup_global_manager,
+        get_device_type,
+        get_device_name,
+        get_compute_units
+    )
 except ImportError:
-    # If relative import fails, try absolute import
     sys.path.insert(0, os.path.dirname(__file__))
-    from intelligent_vram_manager import get_vram_manager, calculate_optimal_blockswap_config, register_model_tensors, cleanup_global_manager
+    from intelligent_vram_manager import (
+        get_vram_manager,
+        calculate_optimal_blockswap_config,
+        register_model_tensors,
+        cleanup_global_manager,
+        get_device_type,
+        get_device_name,
+        get_compute_units
+    )
 
 # Setup logging
 log = logging.getLogger(__name__)
 
 class WanVideoEnhancedBlockSwap:
-    """WanVideo Enhanced BlockSwap (CUDA Optimized) Node"""
+    """WanVideo Enhanced BlockSwap Node (NVIDIA CUDA & AMD ROCm)"""
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -58,10 +74,10 @@ class WanVideoEnhancedBlockSwap:
         if debug_mode:
             log.setLevel(logging.DEBUG)
 
-        log.info(f"WanVideo Enhanced BlockSwap (CUDA Optimized)")
+        log.info(f"WanVideo Enhanced BlockSwap")
         log.info(f"   Auto tuning: {auto_tuning}")
         log.info(f"   VRAM threshold: {vram_threshold}%")
-        log.info(f"   CUDA optimization: {enable_cuda}")
+        log.info(f"   GPU optimization: {enable_cuda}")
 
         # Build base parameters
         enhanced_args = {
@@ -80,52 +96,53 @@ class WanVideoEnhancedBlockSwap:
         if auto_tuning:
             log.info("Enabling intelligent hardware tuning...")
 
-            # Get VRAM manager for hardware detection
             manager = get_vram_manager(vram_threshold)
             stats = manager.get_memory_stats()
 
-            # Hardware detection and auto configuration
-            if torch.cuda.is_available():
-                props = torch.cuda.get_device_properties(0)
-                sm_count = props.multi_processor_count
-                vram_total_gb = props.total_memory / (1024**3)
+            device_type = get_device_type()
+            device_name = get_device_name()
+            compute_units = get_compute_units()
+
+            if device_type in ["cuda", "hip"]:
+                from .intelligent_vram_manager import get_device_memory_info
+                vram_total, _ = get_device_memory_info()
+                vram_total_gb = vram_total / (1024**3)
 
                 log.info(f"Hardware detection:")
-                log.info(f"   GPU: {props.name}")
+                log.info(f"   Device type: {device_type.upper()}")
+                log.info(f"   GPU: {device_name}")
                 log.info(f"   VRAM: {vram_total_gb:.1f}GB")
-                log.info(f"   SM count: {sm_count}")
+                log.info(f"   Compute units: {compute_units}")
                 log.info(f"   Current usage: {stats.vram_usage_percent:.1f}%")
 
-                # Auto calculate CUDA stream count
-                if sm_count >= 100:  # RTX 5090/4090 high-end cards
-                    auto_streams = min(16, max(8, sm_count // 10))
-                elif sm_count >= 80:  # RTX 3090 etc
-                    auto_streams = min(12, max(6, sm_count // 12))
-                else:  # Other GPUs
-                    auto_streams = min(8, max(4, sm_count // 15))
+                if compute_units >= 100:
+                    auto_streams = min(16, max(8, compute_units // 10))
+                elif compute_units >= 80:
+                    auto_streams = min(12, max(6, compute_units // 12))
+                elif compute_units >= 60:
+                    auto_streams = min(10, max(6, compute_units // 10))
+                else:
+                    auto_streams = min(8, max(4, compute_units // 15))
 
-                # Auto calculate bandwidth target
-                if vram_total_gb >= 30:  # Large VRAM GPU
+                if vram_total_gb >= 30:
                     auto_bandwidth = min(0.9, max(0.7, (100 - vram_threshold) / 100))
-                elif vram_total_gb >= 20:  # Medium VRAM GPU
+                elif vram_total_gb >= 20:
                     auto_bandwidth = min(0.8, max(0.6, (100 - vram_threshold) / 100))
-                else:  # Small VRAM GPU
+                else:
                     auto_bandwidth = min(0.7, max(0.5, (100 - vram_threshold) / 100))
 
-                # Update auto-calculated parameters
                 enhanced_args.update({
                     "num_cuda_streams": auto_streams,
                     "bandwidth_target": auto_bandwidth,
                 })
 
                 log.info(f"Auto configuration completed:")
-                log.info(f"   CUDA streams: {auto_streams}")
+                log.info(f"   Streams: {auto_streams}")
                 log.info(f"   Bandwidth target: {auto_bandwidth:.0%}")
 
             else:
-                log.warning("CUDA not available, using default configuration")
+                log.warning("GPU not available, using default configuration")
         
-        # Check VRAM usage
         if enable_cuda:
             try:
                 manager = get_vram_manager(vram_threshold)
@@ -135,11 +152,8 @@ class WanVideoEnhancedBlockSwap:
                     log.warning(f"Current VRAM usage ({current_stats.vram_usage_percent:.1f}%) exceeds threshold ({vram_threshold}%)")
                     log.warning("   Recommend enabling BlockSwap or lowering threshold")
 
-                # Start real-time monitoring
-                manager.start_monitoring()
-
             except Exception as e:
-                log.error(f"VRAM monitoring startup failed: {e}")
+                log.error(f"VRAM check failed: {e}")
 
         log.info(f"Enhanced BlockSwap configuration completed")
         log.info(f"   Final config: blocks={enhanced_args['blocks_to_swap']}, streams={enhanced_args['num_cuda_streams']}, ratio={enhanced_args['bandwidth_target']:.0%}")
@@ -152,7 +166,7 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "WanVideoEnhancedBlockSwap": "WanVideo Enhanced BlockSwap (CUDA Optimized)",
+    "WanVideoEnhancedBlockSwap": "WanVideo Enhanced BlockSwap",
 }
 
 # Cleanup function

@@ -16,6 +16,49 @@ import weakref
 # Setup logging
 log = logging.getLogger(__name__)
 
+def get_device_type():
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch, 'hip') and torch.hip.is_available():
+        return "hip"
+    else:
+        return "cpu"
+
+def get_device_properties(device_id=0):
+    device_type = get_device_type()
+    if device_type == "cuda":
+        return torch.cuda.get_device_properties(device_id)
+    elif device_type == "hip":
+        return torch.cuda.get_device_properties(device_id)
+    else:
+        return None
+
+def get_device_memory_info(device_id=0):
+    device_type = get_device_type()
+    if device_type in ["cuda", "hip"]:
+        props = get_device_properties(device_id)
+        total = props.total_memory
+        allocated = torch.cuda.memory_allocated(device_id)
+        return total, allocated
+    else:
+        return 0, 0
+
+def get_device_name(device_id=0):
+    device_type = get_device_type()
+    if device_type in ["cuda", "hip"]:
+        props = get_device_properties(device_id)
+        return props.name
+    else:
+        return "CPU"
+
+def get_compute_units(device_id=0):
+    device_type = get_device_type()
+    if device_type in ["cuda", "hip"]:
+        props = get_device_properties(device_id)
+        return props.multi_processor_count
+    else:
+        return 0
+
 @dataclass
 class MemoryStats:
     """Memory statistics information"""
@@ -48,11 +91,7 @@ class IntelligentVRAMManager:
         self.vram_threshold_percent = vram_threshold_percent
         self.tensor_registry: Dict[str, TensorInfo] = {}
         self.migration_lock = threading.Lock()
-        self.monitoring_active = False
-        self.monitoring_thread = None
-        self.monitoring_interval = 5.0  # 5 second monitoring interval
 
-        # Performance statistics
         self.migration_stats = {
             "total_migrations": 0,
             "total_migrated_mb": 0.0,
@@ -60,21 +99,21 @@ class IntelligentVRAMManager:
             "last_migration_time": 0.0
         }
 
-        log.info(f"Intelligent VRAM manager initialized: threshold={vram_threshold_percent}%")
+        device_type = get_device_type()
+        device_name = get_device_name()
+        log.info(f"Intelligent VRAM manager initialized: threshold={vram_threshold_percent}%, device={device_type} ({device_name})")
 
     def get_memory_stats(self) -> MemoryStats:
         """Get current memory statistics"""
-        # VRAM information
-        if torch.cuda.is_available():
-            vram_total = torch.cuda.get_device_properties(0).total_memory
-            vram_used = torch.cuda.memory_allocated()
+        vram_total, vram_used = get_device_memory_info()
+
+        if vram_total > 0:
             vram_available = vram_total - vram_used
             vram_usage_percent = (vram_used / vram_total) * 100
         else:
-            vram_total = vram_used = vram_available = 0
+            vram_available = 0
             vram_usage_percent = 0.0
 
-        # DRAM information
         dram_info = psutil.virtual_memory()
 
         return MemoryStats(
@@ -227,39 +266,6 @@ class IntelligentVRAMManager:
             log.error(f"Tensor migration failed: {tensor_id}, error: {e}")
             return False
     
-    def start_monitoring(self):
-        """Start real-time monitoring"""
-        if self.monitoring_active:
-            return
-
-        self.monitoring_active = True
-        self.monitoring_thread = threading.Thread(target=self._monitoring_loop, daemon=True)
-        self.monitoring_thread.start()
-
-        log.info("Started VRAM real-time monitoring")
-
-    def stop_monitoring(self):
-        """Stop real-time monitoring"""
-        self.monitoring_active = False
-        if self.monitoring_thread:
-            self.monitoring_thread.join(timeout=1.0)
-
-        log.info("Stopped VRAM real-time monitoring")
-
-    def _monitoring_loop(self):
-        """Monitoring loop"""
-        while self.monitoring_active:
-            try:
-                if self.check_vram_threshold():
-                    log.warning("VRAM usage exceeds threshold, starting intelligent migration...")
-                    self.intelligent_block_migration()
-
-                time.sleep(self.monitoring_interval)
-
-            except Exception as e:
-                log.error(f"Monitoring loop error: {e}")
-                time.sleep(self.monitoring_interval)
-
     def get_statistics(self) -> Dict[str, Any]:
         """Get manager statistics"""
         stats = self.get_memory_stats()
@@ -268,13 +274,11 @@ class IntelligentVRAMManager:
             "memory_stats": stats,
             "tensor_count": len(self.tensor_registry),
             "migration_stats": self.migration_stats.copy(),
-            "threshold_percent": self.vram_threshold_percent,
-            "monitoring_active": self.monitoring_active
+            "threshold_percent": self.vram_threshold_percent
         }
 
     def cleanup(self):
         """Clean up resources"""
-        self.stop_monitoring()
         self.tensor_registry.clear()
         log.info("VRAM manager cleanup completed")
 
@@ -382,15 +386,12 @@ def calculate_optimal_blockswap_config(transformer, vram_threshold: float = 50.0
         blocks_to_swap = 0
         log.info(f"Memory sufficient, no BlockSwap needed")
 
-    # 5. Calculate CUDA stream count (based on blocks and hardware)
-    if torch.cuda.is_available():
-        sm_count = torch.cuda.get_device_properties(0).multi_processor_count
+    compute_units = get_compute_units()
+    if compute_units > 0:
         if blocks_to_swap > 0:
-            # With BlockSwap, need more streams to handle migration
-            num_streams = min(16, max(4, min(blocks_to_swap * 2, sm_count // 4)))
+            num_streams = min(16, max(4, min(blocks_to_swap * 2, compute_units // 4)))
         else:
-            # Without BlockSwap, standard stream configuration
-            num_streams = min(8, max(2, sm_count // 8))
+            num_streams = min(8, max(2, compute_units // 8))
     else:
         num_streams = 4
 
@@ -453,20 +454,17 @@ def register_model_tensors(transformer, vram_threshold: float = 50.0) -> Dict[st
     total_size_mb = 0
 
     try:
-        # Iterate through model parameters
         for name, param in transformer.named_parameters():
-            if param.device.type == 'cuda':
-                # Determine if critical tensor
+            device_type = get_device_type()
+            if param.device.type in ['cuda', device_type]:
                 is_critical = 'embed' in name.lower() or 'norm' in name.lower() or param.numel() < 1000
 
-                # Calculate priority
                 priority = 1.0
                 if 'weight' in name.lower():
                     priority += 0.5
                 if 'attention' in name.lower():
                     priority += 0.3
 
-                # Large tensors have low priority, easy to migrate
                 size_mb = param.numel() * param.element_size() / (1024 * 1024)
                 if size_mb > 100:
                     priority -= 0.5
@@ -475,7 +473,6 @@ def register_model_tensors(transformer, vram_threshold: float = 50.0) -> Dict[st
 
                 priority = max(0.1, priority)
 
-                # Register tensor
                 tensor_id = f"model.{name}"
                 manager.register_tensor(tensor_id, param, is_critical, priority)
 
@@ -483,9 +480,6 @@ def register_model_tensors(transformer, vram_threshold: float = 50.0) -> Dict[st
                 total_size_mb += size_mb
 
         log.info(f"Registered {registered_count} tensors to VRAM manager, total size {total_size_mb:.1f}MB")
-
-        # Start real-time monitoring
-        manager.start_monitoring()
 
     except Exception as e:
         log.error(f"Tensor registration failed: {e}")
